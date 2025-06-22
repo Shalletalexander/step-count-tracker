@@ -1,0 +1,228 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Daily Step Count Tracker</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background: #e0f7fa;
+    color: #006064;
+    padding: 20px;
+  }
+  #stepCount {
+    font-size: 72px;
+    margin: 20px 0;
+  }
+  #timer {
+    font-size: 24px;
+    margin: 10px 0 20px 0;
+  }
+  button {
+    font-size: 18px;
+    padding: 10px 20px;
+    margin: 10px;
+    background: #00796b;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:disabled {
+    background: #004d40;
+    cursor: not-allowed;
+  }
+  #metrics p {
+    font-size: 20px;
+    margin: 5px 0;
+  }
+  #history {
+    margin-top: 30px;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: left;
+  }
+  #history h2 {
+    text-align: center;
+  }
+  #history ul {
+    padding-left: 20px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Daily Step Count Tracker</h1>
+<div id="stepCount">0</div>
+<div id="timer">00:00</div>
+
+<div id="metrics">
+  <p>Distance: <span id="distance">0 km</span></p>
+  <p>Calories burned: <span id="calories">0 kcal</span></p>
+</div>
+
+<button id="startBtn">Start Walk</button>
+<button id="stopBtn" disabled>Stop Walk</button>
+
+<div id="history">
+  <h2>Last 7 Days Step History</h2>
+  <ul id="historyList"></ul>
+</div>
+
+<script>
+  let stepCount = 0;
+  let walking = false;
+  let startTime, timerInterval;
+  let lastMagnitude = null;
+  let stepCooldown = false;
+  const stepThreshold = 1.2;
+
+  let stepLengthMeters = 0.78;
+  let caloriesPerStep = 0.04;
+
+  function getTodayKey() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function loadTodaySteps() {
+    const key = getTodayKey();
+    const steps = localStorage.getItem(key);
+    return steps ? parseInt(steps) : 0;
+  }
+
+  function saveTodaySteps(steps) {
+    const key = getTodayKey();
+    localStorage.setItem(key, steps);
+  }
+
+  function saveLastDate(dateStr) {
+    localStorage.setItem('lastStepDate', dateStr);
+  }
+
+  function loadLastDate() {
+    return localStorage.getItem('lastStepDate');
+  }
+
+  function resetIfNewDay() {
+    const lastDate = loadLastDate();
+    const today = getTodayKey();
+    if (lastDate !== today) {
+      stepCount = 0;
+      saveTodaySteps(stepCount);
+      saveLastDate(today);
+    } else {
+      stepCount = loadTodaySteps();
+    }
+  }
+
+  function startTimer() {
+    startTime = Date.now();
+    timerInterval = setInterval(() => {
+      let elapsed = Date.now() - startTime;
+      let mins = Math.floor(elapsed / 60000);
+      let secs = Math.floor((elapsed % 60000) / 1000);
+      document.getElementById('timer').textContent =
+        \`\${mins.toString().padStart(2,'0')}:\${secs.toString().padStart(2,'0')}\`;
+    }, 1000);
+  }
+
+  function stopTimer() {
+    clearInterval(timerInterval);
+    document.getElementById('timer').textContent = "00:00";
+  }
+
+  function updateMetrics(steps) {
+    let distance = (steps * stepLengthMeters / 1000).toFixed(2);
+    let calories = (steps * caloriesPerStep).toFixed(2);
+    document.getElementById('distance').textContent = \`\${distance} km\`;
+    document.getElementById('calories').textContent = \`\${calories} kcal\`;
+  }
+
+  function handleMotion(event) {
+    if (!walking) return;
+
+    let ax = event.accelerationIncludingGravity.x || 0;
+    let ay = event.accelerationIncludingGravity.y || 0;
+    let az = event.accelerationIncludingGravity.z || 0;
+    let magnitude = Math.sqrt(ax*ax + ay*ay + az*az);
+
+    if (lastMagnitude !== null) {
+      let delta = Math.abs(magnitude - lastMagnitude);
+      if (delta > stepThreshold && !stepCooldown) {
+        stepCount++;
+        saveTodaySteps(stepCount);
+        updateDisplay(stepCount);
+        stepCooldown = true;
+        setTimeout(() => stepCooldown = false, 300);
+      }
+    }
+    lastMagnitude = magnitude;
+  }
+
+  function updateDisplay(steps) {
+    document.getElementById('stepCount').textContent = steps;
+    updateMetrics(steps);
+  }
+
+  function showHistory() {
+    const historyList = document.getElementById('historyList');
+    historyList.innerHTML = '';
+    let today = new Date();
+    for(let i=6; i>=0; i--) {
+      let date = new Date(today);
+      date.setDate(today.getDate() - i);
+      let dateKey = date.toISOString().slice(0,10);
+      let steps = localStorage.getItem(dateKey) || 0;
+      let li = document.createElement('li');
+      li.textContent = \`\${dateKey}: \${steps} steps\`;
+      historyList.appendChild(li);
+    }
+  }
+
+  document.getElementById('startBtn').addEventListener('click', () => {
+    resetIfNewDay();
+    walking = true;
+    startTimer();
+    updateDisplay(stepCount);
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('stopBtn').disabled = false;
+  });
+
+  document.getElementById('stopBtn').addEventListener('click', () => {
+    walking = false;
+    stopTimer();
+    saveLastDate(getTodayKey());
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('stopBtn').disabled = true;
+  });
+
+  function initMotion() {
+    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+      DeviceMotionEvent.requestPermission()
+        .then(response => {
+          if (response === 'granted') {
+            window.addEventListener('devicemotion', handleMotion);
+          } else {
+            alert('Permission denied to access motion sensors.');
+          }
+        })
+        .catch(console.error);
+    } else {
+      window.addEventListener('devicemotion', handleMotion);
+    }
+  }
+
+  window.onload = () => {
+    initMotion();
+    resetIfNewDay();
+    updateDisplay(stepCount);
+    showHistory();
+  };
+</script>
+
+</body>
+</html>
