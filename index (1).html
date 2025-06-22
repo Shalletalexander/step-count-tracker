@@ -1,0 +1,160 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Step Count Tracker + Breathing Timer</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f5f9ff;
+      color: #333;
+    }
+    h1, h2 {
+      text-align: center;
+      color: #0077b6;
+    }
+    #step-count, #timer, #distance, #calories {
+      font-size: 1.2em;
+      text-align: center;
+      margin: 10px 0;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      font-size: 1em;
+      background-color: #0077b6;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #005f87;
+    }
+  </style>
+</head>
+<body>
+  <h1>Step Count Tracker</h1>
+  <div id="step-count">Steps: 0</div>
+  <div id="timer">Time: 0s</div>
+  <div id="distance">Distance: 0.00 km</div>
+  <div id="calories">Calories Burned: 0</div>
+  <div style="text-align: center;">
+    <button onclick="startWalk()">Start Walk</button>
+    <button onclick="stopWalk()">Stop Walk</button>
+  </div>
+
+  <!-- Breathing Timer Section -->
+  <section id="breathing-timer" style="margin-top: 40px; text-align:center;">
+    <h2>Calm Breathing Timer</h2>
+    <div id="circle" style="
+      margin: 20px auto;
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      background: #a2d5f2;
+      opacity: 0.8;
+      transition: width 4s ease-in-out, height 4s ease-in-out;
+    "></div>
+    <p id="breath-text" style="font-size: 24px; margin-top: 15px;">Inhale</p>
+
+    <div style="margin-top: 20px;">
+      <button onclick="startBreathing(5)">5 Minutes</button>
+      <button onclick="startBreathing(10)">10 Minutes</button>
+      <button onclick="stopBreathing()">Stop</button>
+    </div>
+  </section>
+
+  <script>
+    let stepCount = 0;
+    let startTime;
+    let timerInterval;
+    let distance = 0;
+    let calories = 0;
+
+    function updateStats() {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      document.getElementById("timer").textContent = "Time: " + elapsed + "s";
+      distance = stepCount * 0.0008;
+      calories = Math.round(stepCount * 0.04);
+      document.getElementById("distance").textContent = "Distance: " + distance.toFixed(2) + " km";
+      document.getElementById("calories").textContent = "Calories Burned: " + calories;
+    }
+
+    function startWalk() {
+      stepCount = 0;
+      startTime = Date.now();
+      timerInterval = setInterval(updateStats, 1000);
+      if (window.DeviceMotionEvent) {
+        window.addEventListener("devicemotion", countSteps, false);
+      }
+    }
+
+    function stopWalk() {
+      clearInterval(timerInterval);
+      window.removeEventListener("devicemotion", countSteps, false);
+    }
+
+    function countSteps(event) {
+      const acc = event.accelerationIncludingGravity;
+      if (acc.x > 1.5 || acc.y > 1.5 || acc.z > 1.5) {
+        stepCount++;
+        document.getElementById("step-count").textContent = "Steps: " + stepCount;
+      }
+    }
+
+    let breathingInterval;
+    let breathPhase = 'inhale';
+    let circle = null;
+    let breathText = null;
+    let totalSeconds;
+    let secondsPassed;
+
+    window.onload = function() {
+      circle = document.getElementById('circle');
+      breathText = document.getElementById('breath-text');
+    };
+
+    function startBreathing(minutes) {
+      stopBreathing();
+      totalSeconds = minutes * 60;
+      secondsPassed = 0;
+      breathPhase = 'inhale';
+      breathText.textContent = 'Inhale';
+      circle.style.width = '150px';
+      circle.style.height = '150px';
+      breathingInterval = setInterval(() => {
+        secondsPassed++;
+        if (secondsPassed % 8 === 0) {
+          if (breathPhase === 'inhale') {
+            breathPhase = 'exhale';
+            breathText.textContent = 'Exhale';
+            circle.style.width = '100px';
+            circle.style.height = '100px';
+          } else {
+            breathPhase = 'inhale';
+            breathText.textContent = 'Inhale';
+            circle.style.width = '150px';
+            circle.style.height = '150px';
+          }
+        }
+        if (secondsPassed >= totalSeconds) {
+          stopBreathing();
+          breathText.textContent = 'Session Complete';
+        }
+      }, 1000);
+    }
+
+    function stopBreathing() {
+      clearInterval(breathingInterval);
+      breathText.textContent = '';
+      circle.style.width = '150px';
+      circle.style.height = '150px';
+    }
+  </script>
+</body>
+</html>
